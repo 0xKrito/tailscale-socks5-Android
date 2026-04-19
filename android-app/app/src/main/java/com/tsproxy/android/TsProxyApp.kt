@@ -3,7 +3,10 @@ package com.tsproxy.android
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Intent
 import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import java.io.File
 import java.io.PrintWriter
@@ -28,7 +31,7 @@ class TsProxyApp : Application() {
                 "ts-proxy service",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Tailscale proxy running notification"
+                description = "Tailscale proxy running"
                 setShowBadge(false)
             }
             val manager = getSystemService(NotificationManager::class.java)
@@ -44,7 +47,6 @@ class TsProxyApp : Application() {
                 throwable.printStackTrace(PrintWriter(sw))
                 appendLog("CRASH on thread ${thread.name}: $sw")
             } catch (_: Exception) {}
-            // Delegate to default handler so the app still terminates
             defaultHandler?.uncaughtException(thread, throwable)
         }
     }
@@ -54,29 +56,24 @@ class TsProxyApp : Application() {
         lateinit var instance: TsProxyApp
             private set
 
-        /** Append a line to the crash/log file. */
         fun appendLog(msg: String) {
             try {
                 val ts = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(Date())
                 val file = crashLogFile()
                 file.appendText("[$ts] $msg\n")
-                // Also log to logcat
                 Log.d("TsProxy", msg)
             } catch (_: Exception) {}
         }
 
-        /** Read all crash logs. */
         fun readCrashLog(): String {
             val f = crashLogFile()
             return if (f.exists()) f.readText() else "No crash log."
         }
 
-        /** Clear crash log. */
         fun clearCrashLog() {
             crashLogFile().delete()
         }
 
-        /** Path: /data/data/com.tsproxy.android/files/tsproxy_crash.log */
         private fun crashLogFile(): File {
             return File(instance.filesDir, "tsproxy_crash.log")
         }

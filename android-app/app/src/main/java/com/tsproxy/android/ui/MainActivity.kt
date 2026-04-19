@@ -2,7 +2,10 @@ package com.tsproxy.android.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
@@ -133,7 +136,11 @@ fun MainScreen(vm: MainViewModel = viewModel()) {
         }
 
         AnimatedVisibility(showConfig) {
-            ConfigSection(ui, vm)
+            Column {
+                ConfigSection(ui, vm)
+                Spacer(Modifier.height(12.dp))
+                SettingsSection()
+            }
         }
 
         Spacer(Modifier.height(12.dp))
@@ -165,7 +172,7 @@ fun MainScreen(vm: MainViewModel = viewModel()) {
             Spacer(Modifier.height(12.dp))
         }
 
-        // Logs — scrollable, newest first, with clear button
+        // Logs
         val logLines = remember(ui.logs) {
             if (ui.logs.isEmpty()) emptyList()
             else ui.logs.split("\n").filter { it.isNotEmpty() }.reversed()
@@ -183,10 +190,8 @@ fun MainScreen(vm: MainViewModel = viewModel()) {
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { vm.clearLogs() }) {
-                            Text("清除")
-                        }
+                    TextButton(onClick = { vm.clearLogs() }) {
+                        Text("清除")
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -200,7 +205,6 @@ fun MainScreen(vm: MainViewModel = viewModel()) {
                     )
                 } else {
                     val listState = rememberLazyListState()
-                    // Auto-scroll to top (newest logs)
                     LaunchedEffect(logLines.size) {
                         if (logLines.isNotEmpty()) {
                             listState.scrollToItem(0)
@@ -228,7 +232,7 @@ fun MainScreen(vm: MainViewModel = viewModel()) {
             }
         }
 
-        // Crash log (if any)
+        // Crash log
         if (ui.crashLog.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
             Card(
@@ -338,6 +342,136 @@ fun ConfigSection(ui: UiState, vm: MainViewModel) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@Composable
+fun SettingsSection() {
+    val ctx = LocalContext.current
+
+    var batteryIgnored by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val pm = ctx.getSystemService(android.content.Context.POWER_SERVICE) as PowerManager
+                pm.isIgnoringBatteryOptimizations(ctx.packageName)
+            } else {
+                true
+            }
+        )
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                "保活设置",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(12.dp))
+
+            // Battery optimization
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "电池优化",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        if (batteryIgnored) "已豁免" else "未豁免，可能被系统杀后台",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (batteryIgnored)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.error
+                    )
+                }
+                if (!batteryIgnored && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    Button(
+                        onClick = {
+                            try {
+                                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                    data = Uri.parse("package:${ctx.packageName}")
+                                }
+                                ctx.startActivity(intent)
+                                batteryIgnored = true
+                            } catch (_: Exception) {
+                                val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                ctx.startActivity(intent)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondary
+                        )
+                    ) {
+                        Text("设置", style = MaterialTheme.typography.labelMedium)
+                    }
+                } else {
+                    Icon(
+                        Icons.Filled.CheckCircle,
+                        null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // Persistent notification
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "常驻通知",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "确保通知不可被系统清除",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Button(
+                    onClick = {
+                        try {
+                            // Open app's notification channel settings
+                            val intent = Intent().apply {
+                                action = Settings.ACTION_APP_NOTIFICATION_SETTINGS
+                                putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)
+                            }
+                            ctx.startActivity(intent)
+                        } catch (_: Exception) {
+                            // Fallback: open app settings
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.parse("package:${ctx.packageName}")
+                            }
+                            ctx.startActivity(intent)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary
+                    )
+                ) {
+                    Text("设置", style = MaterialTheme.typography.labelMedium)
+                }
+            }
         }
     }
 }
