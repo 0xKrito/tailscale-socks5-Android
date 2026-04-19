@@ -76,8 +76,8 @@ App → Clash TUN (全局代理)
 go install golang.org/x/mobile/cmd/gomobile@latest
 go install golang.org/x/mobile/cmd/gobind@latest
 
-# 编译 AAR
-cd ts-proxy-android
+git clone https://github.com/0xKrito/tailscale-socks5-Android.git
+cd tailscale-socks5-Android
 go get golang.org/x/mobile/bind@latest
 go mod tidy
 gomobile init

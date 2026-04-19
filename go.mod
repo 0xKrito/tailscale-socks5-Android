@@ -1,4 +1,4 @@
-module github.com/0xKrito/ts-proxy-android
+module github.com/0xKrito/tailscale-socks5-Android
 
 go 1.26.1
 

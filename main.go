@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/0xKrito/ts-proxy-android/tsproxy"
+	"github.com/0xKrito/tailscale-socks5-Android/tsproxy"
 	"tailscale.com/tsnet"
 )
 

@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	tsp "github.com/0xKrito/ts-proxy-android/tsproxy"
+	tsp "github.com/0xKrito/tailscale-socks5-Android/tsproxy"
 	"tailscale.com/ipn"
 	"tailscale.com/tsnet"
 )
