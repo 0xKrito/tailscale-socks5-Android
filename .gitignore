@@ -1,0 +1,33 @@
+# Build artifacts
+*.zip
+*.aar
+*.apk
+
+# Runtime
+config.json
+ts-proxy.log
+tsproxy_crash.log
+
+# Python (Termux GUI, not used)
+__pycache__/
+*.pyc
+*.pyo
+
+# Gradle
+android-app/.gradle/
+android-app/build/
+android-app/app/build/
+android-app/local.properties
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+vendor/

@@ -1,0 +1,390 @@
+package com.tsproxy.android.ui
+
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            MaterialTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    MainScreen()
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MainScreen(vm: MainViewModel = viewModel()) {
+    val ui by vm.ui.collectAsStateWithLifecycle()
+    var showConfig by remember { mutableStateOf(false) }
+    val ctx = LocalContext.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
+    ) {
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "ts-proxy",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
+            )
+            StatusBadge(ui.running)
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Status card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                StatusRow("状态", ui.statusText)
+                if (ui.tailscaleIP.isNotEmpty()) {
+                    StatusRow("Tailscale IP", ui.tailscaleIP)
+                }
+                StatusRow("SOCKS5", ui.socksAddr)
+                StatusRow("主机名", ui.hostname)
+
+                Spacer(Modifier.height(12.dp))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { vm.startProxy() },
+                        enabled = !ui.running,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        ),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Filled.PlayArrow, null)
+                        Spacer(Modifier.width(4.dp))
+                        Text("启动")
+                    }
+                    Button(
+                        onClick = { vm.stopProxy() },
+                        enabled = ui.running,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        ),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Filled.Stop, null)
+                        Spacer(Modifier.width(4.dp))
+                        Text("停止")
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // Config toggle
+        OutlinedButton(
+            onClick = { showConfig = !showConfig },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                if (showConfig) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                null
+            )
+            Spacer(Modifier.width(4.dp))
+            Text("配置")
+        }
+
+        AnimatedVisibility(showConfig) {
+            ConfigSection(ui, vm)
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // Login URL button (if present)
+        if (ui.loginUrl.isNotEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                )
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        "需要 Tailscale 认证",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = {
+                        ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ui.loginUrl)))
+                    }) {
+                        Icon(Icons.Filled.OpenInBrowser, null)
+                        Spacer(Modifier.width(4.dp))
+                        Text("打开登录链接")
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
+        // Logs — scrollable, newest first, with clear button
+        val logLines = remember(ui.logs) {
+            if (ui.logs.isEmpty()) emptyList()
+            else ui.logs.split("\n").filter { it.isNotEmpty() }.reversed()
+        }
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "日志 (${logLines.size})",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { vm.clearLogs() }) {
+                            Text("清除")
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+
+                if (logLines.isEmpty()) {
+                    Text(
+                        "无日志",
+                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    val listState = rememberLazyListState()
+                    // Auto-scroll to top (newest logs)
+                    LaunchedEffect(logLines.size) {
+                        if (logLines.isNotEmpty()) {
+                            listState.scrollToItem(0)
+                        }
+                    }
+
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 400.dp)
+                    ) {
+                        items(logLines) { line ->
+                            Text(
+                                text = line,
+                                fontFamily = FontFamily.Monospace,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 1.dp)
+                            )
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                        }
+                    }
+                }
+            }
+        }
+
+        // Crash log (if any)
+        if (ui.crashLog.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "崩溃日志",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        TextButton(onClick = { vm.clearCrashLog() }) {
+                            Text("清除", color = MaterialTheme.colorScheme.onErrorContainer)
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        ui.crashLog.takeLast(2000),
+                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ConfigSection(ui: UiState, vm: MainViewModel) {
+    var socks by remember { mutableStateOf(ui.socksAddr) }
+    var hostname by remember { mutableStateOf(ui.hostname) }
+    var tsnetDir by remember { mutableStateOf(ui.tsnetDir) }
+
+    LaunchedEffect(ui.socksAddr, ui.hostname, ui.tsnetDir) {
+        socks = ui.socksAddr
+        hostname = ui.hostname
+        tsnetDir = ui.tsnetDir
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                "基本配置",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(8.dp))
+
+            OutlinedTextField(
+                value = socks,
+                onValueChange = { socks = it },
+                label = { Text("SOCKS5 监听地址") },
+                placeholder = { Text("127.0.0.1:1080") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+
+            OutlinedTextField(
+                value = hostname,
+                onValueChange = { hostname = it },
+                label = { Text("Tailscale 设备名") },
+                placeholder = { Text("ts-proxy-android") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+
+            OutlinedTextField(
+                value = tsnetDir,
+                onValueChange = { tsnetDir = it },
+                label = { Text("tsnet 数据目录 (可选)") },
+                placeholder = { Text("默认: 自动") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            Button(
+                onClick = { vm.saveConfig(socks, hostname, tsnetDir) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Filled.Save, null)
+                Spacer(Modifier.width(4.dp))
+                Text("保存配置")
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Text(
+                "Clash 配置参考: 将 100.64.0.0/10 和 fd7a:115c:a1e0::/48 路由到 socks5://127.0.0.1:1080",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun StatusBadge(running: Boolean) {
+    val color = if (running) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.error
+    val text = if (running) "运行中" else "已停止"
+
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = color.copy(alpha = 0.15f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                if (running) Icons.Filled.CheckCircle else Icons.Filled.Cancel,
+                null,
+                tint = color,
+                modifier = Modifier.size(14.dp)
+            )
+            Text(text, color = color, style = MaterialTheme.typography.labelMedium)
+        }
+    }
+}
+
+@Composable
+fun StatusRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}

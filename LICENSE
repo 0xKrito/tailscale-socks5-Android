@@ -1,0 +1,37 @@
+MIT License
+
+Copyright (c) 2026 0xKrito
+
+This project is based on ts-proxy by ge9 (https://github.com/ge9/ts-proxy),
+which is licensed under the MIT License.
+
+It also uses the following third-party libraries:
+- github.com/txthinking/socks5 (MIT License)
+- github.com/wlynxg/anet (MIT License)
+- tailscale.com/tsnet (BSD-3-Clause License)
+- golang.org/x/mobile/bind (BSD-3-Clause License)
+
+The Android application UI (android-app/) and ts-proxy-Android specific
+modifications are original work by 0xKrito.
+
+Original ts-proxy license:
+
+Copyright (c) 2024 ge9
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
