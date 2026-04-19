@@ -25,9 +25,8 @@ jobs:
 
       - name: Download modules
         run: |
-          go get golang.org/x/mobile/bind@latest
           go get tailscale.com@latest
-          go mod tidy
+          go get golang.org/x/mobile/bind@latest
           go mod download
 
       - name: Install gomobile + NDK
