@@ -67,7 +67,7 @@ class TsProxyService : Service() {
     }
 
     private fun startProxy(socks: String, hostname: String, tsnetDir: String) {
-        val notification = buildNotification("Starting ts-proxy...")
+        val notification = buildNotification("Starting tailscale-socks5...")
         startForeground(NOTIFICATION_ID, notification)
 
         acquireWakeLock()
@@ -121,7 +121,7 @@ class TsProxyService : Service() {
             this, 0, tapIntent, PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, TsProxyApp.CHANNEL_ID)
-            .setContentTitle("ts-proxy")
+            .setContentTitle("tailscale-socks5")
             .setContentText(text)
             .setSmallIcon(R.drawable.ic_vpn_key)
             .setContentIntent(pendingIntent)

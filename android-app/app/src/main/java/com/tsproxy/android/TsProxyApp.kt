@@ -28,7 +28,7 @@ class TsProxyApp : Application() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "ts-proxy service",
+                "tailscale-socks5 service",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "Tailscale proxy running"

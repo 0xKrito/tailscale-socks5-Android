@@ -65,7 +65,7 @@ fun MainScreen(vm: MainViewModel = viewModel()) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "ts-proxy",
+                "tailscale-socks5",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )
