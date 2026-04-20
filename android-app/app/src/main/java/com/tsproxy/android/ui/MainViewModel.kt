@@ -23,7 +23,7 @@ private val Application.dataStore by preferencesDataStore("tsproxy_prefs")
 data class UiState(
     val running: Boolean = false,
     val socksAddr: String = "127.0.0.1:1080",
-    val hostname: String = "ts-proxy-android",
+    val hostname: String = "ts-socks5",
     val tsnetDir: String = "",
     val tailscaleIP: String = "",
     val loginUrl: String = "",
@@ -47,7 +47,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val prefs = getApplication<Application>().dataStore.data.first()
             _ui.value = _ui.value.copy(
                 socksAddr = prefs[SOCKS_KEY] ?: "127.0.0.1:1080",
-                hostname = prefs[HOSTNAME_KEY] ?: "ts-proxy-android",
+                hostname = prefs[HOSTNAME_KEY] ?: "ts-socks5",
                 tsnetDir = prefs[TSNETDIR_KEY] ?: ""
             )
         }

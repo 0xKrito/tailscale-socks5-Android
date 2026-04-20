@@ -65,7 +65,7 @@ fun MainScreen(vm: MainViewModel = viewModel()) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "tailscale-socks5",
+                "ts-socks5",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -309,7 +309,7 @@ fun ConfigSection(ui: UiState, vm: MainViewModel) {
                 value = hostname,
                 onValueChange = { hostname = it },
                 label = { Text("Tailscale 设备名") },
-                placeholder = { Text("ts-proxy-android") },
+                placeholder = { Text("ts-socks5") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
