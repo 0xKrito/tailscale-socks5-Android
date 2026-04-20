@@ -15,6 +15,15 @@ android {
         versionName = "1.0.0"
     }
 
+    signingConfigs {
+        create("ci") {
+            storeFile = rootProject.file("signing/keystore.jks")
+            storePassword = "tailscale-socks5"
+            keyAlias = "key"
+            keyPassword = "tailscale-socks5"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -22,6 +31,20 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            val ciKeystore = rootProject.file("signing/keystore.jks")
+            signingConfig = if (ciKeystore.exists()) {
+                signingConfigs.getByName("ci")
+            } else {
+                signingConfigs.getByName("debug")
+            }
+        }
+        debug {
+            val ciKeystore = rootProject.file("signing/keystore.jks")
+            signingConfig = if (ciKeystore.exists()) {
+                signingConfigs.getByName("ci")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 

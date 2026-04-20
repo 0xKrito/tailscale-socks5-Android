@@ -118,6 +118,22 @@ jobs:
           name: tsproxy-aar
           path: android-app/app/libs/
 
+      # Generate a fixed keystore so debug builds always have same signature
+      # Users don't need to uninstall before updating
+      - name: Generate fixed keystore
+        working-directory: android-app
+        run: |
+          mkdir -p signing
+          keytool -genkey -v \
+            -keystore signing/keystore.jks \
+            -storepass "tailscale-socks5" \
+            -alias "key" \
+            -keypass "tailscale-socks5" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=tailscale-socks5, OU=dev, O=dev, L=NA, ST=NA, C=US"
+
       - name: Generate Gradle wrapper
         working-directory: android-app
         run: |
@@ -136,10 +152,19 @@ jobs:
       - name: List outputs
         run: find android-app/app/build/outputs -name "*.apk" -exec ls -lh {} \;
 
+      - name: Rename APKs
+        run: |
+          for f in android-app/app/build/outputs/apk/debug/*.apk; do
+            mv "$f" "$(dirname $f)/tailscale-socks5-debug.apk"
+          done
+          for f in android-app/app/build/outputs/apk/release/*.apk; do
+            mv "$f" "$(dirname $f)/tailscale-socks5-release.apk"
+          done 2>/dev/null || true
+
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: tsproxy-android-apk
+          name: tailscale-socks5-apk
           path: |
             android-app/app/build/outputs/apk/debug/*.apk
             android-app/app/build/outputs/apk/release/*.apk

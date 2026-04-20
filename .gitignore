@@ -3,6 +3,9 @@
 *.aar
 *.apk
 
+# Signing (CI generates, don't commit keys)
+**/signing/
+
 # Runtime
 config.json
 ts-proxy.log
