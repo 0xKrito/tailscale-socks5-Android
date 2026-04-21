@@ -1,19 +1,27 @@
 package com.tsproxy.android.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -22,7 +30,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -172,98 +182,169 @@ fun MainScreen(vm: MainViewModel = viewModel()) {
             Spacer(Modifier.height(12.dp))
         }
 
-        // Logs
+        // ts日志 — scrollable, newest first, with pause and copy
         val logLines = remember(ui.logs) {
             if (ui.logs.isEmpty()) emptyList()
             else ui.logs.split("\n").filter { it.isNotEmpty() }.reversed()
         }
+        // When paused, freeze the displayed lines
+        var frozenLogs by remember { mutableStateOf<List<String>>(emptyList()) }
+        val displayLogs = if (ui.logPaused) frozenLogs else logLines
+        LaunchedEffect(ui.logPaused, logLines) {
+            if (!ui.logPaused) frozenLogs = logLines
+        }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "日志 (${logLines.size})",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    TextButton(onClick = { vm.clearLogs() }) {
+        val clipboardManager = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val haptics = LocalHapticFeedback.current
+
+        LogCard(
+            title = "ts日志 (${displayLogs.size})",
+            lines = displayLogs,
+            onClear = { vm.clearLogs() },
+            onPauseToggle = { vm.toggleLogPause() },
+            paused = ui.logPaused,
+            onCopyAll = {
+                val text = displayLogs.joinToString("\n")
+                clipboardManager.setPrimaryClip(ClipData.newPlainText("ts日志", text))
+                Toast.makeText(ctx, "已复制 ${displayLogs.size} 条日志", Toast.LENGTH_SHORT).show()
+            },
+            onCopyLine = { line ->
+                clipboardManager.setPrimaryClip(ClipData.newPlainText("日志", line))
+                Toast.makeText(ctx, "已复制", Toast.LENGTH_SHORT).show()
+            },
+            haptics = haptics,
+            containerColor = null // default
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        // 程序日志 — scrollable with copy
+        val crashLines = remember(ui.crashLog) {
+            if (ui.crashLog.isEmpty()) emptyList()
+            else ui.crashLog.trim().split("\n").filter { it.isNotEmpty() }
+        }
+
+        if (crashLines.isNotEmpty()) {
+            LogCard(
+                title = "程序日志 (${crashLines.size})",
+                lines = crashLines,
+                onClear = { vm.clearCrashLog() },
+                onPauseToggle = null, // no pause for program log
+                paused = false,
+                onCopyAll = {
+                    val text = crashLines.joinToString("\n")
+                    clipboardManager.setPrimaryClip(ClipData.newPlainText("程序日志", text))
+                    Toast.makeText(ctx, "已复制 ${crashLines.size} 条日志", Toast.LENGTH_SHORT).show()
+                },
+                onCopyLine = { line ->
+                    clipboardManager.setPrimaryClip(ClipData.newPlainText("日志", line))
+                    Toast.makeText(ctx, "已复制", Toast.LENGTH_SHORT).show()
+                },
+                haptics = haptics,
+                containerColor = MaterialTheme.colorScheme.errorContainer
+            )
+            Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun LogCard(
+    title: String,
+    lines: List<String>,
+    onClear: () -> Unit,
+    onPauseToggle: (() -> Unit)?,
+    paused: Boolean,
+    onCopyAll: () -> Unit,
+    onCopyLine: (String) -> Unit,
+    haptics: androidx.compose.ui.hapticfeedback.HapticFeedback,
+    containerColor: androidx.compose.ui.graphics.Color?
+) {
+    val cardColors = if (containerColor != null) {
+        CardDefaults.cardColors(containerColor = containerColor)
+    } else {
+        CardDefaults.cardColors()
+    }
+
+    Card(modifier = Modifier.fillMaxWidth(), colors = cardColors) {
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (containerColor != null) MaterialTheme.colorScheme.onErrorContainer
+                            else MaterialTheme.colorScheme.onSurface
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (onPauseToggle != null) {
+                        TextButton(onClick = onPauseToggle) {
+                            Text(if (paused) "继续" else "暂停")
+                        }
+                    }
+                    TextButton(onClick = onCopyAll) {
+                        Text("复制")
+                    }
+                    TextButton(onClick = onClear) {
                         Text("清除")
                     }
                 }
-                Spacer(Modifier.height(8.dp))
+            }
+            Spacer(Modifier.height(8.dp))
 
-                if (logLines.isEmpty()) {
-                    Text(
-                        "无日志",
-                        fontFamily = FontFamily.Monospace,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    val listState = rememberLazyListState()
-                    LaunchedEffect(logLines.size) {
-                        if (logLines.isNotEmpty()) {
-                            listState.scrollToItem(0)
-                        }
+            if (lines.isEmpty()) {
+                Text(
+                    if (paused) "已暂停，点击继续刷新" else "无日志",
+                    fontFamily = FontFamily.Monospace,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (containerColor != null) MaterialTheme.colorScheme.onErrorContainer
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                val listState = rememberLazyListState()
+                LaunchedEffect(lines.size) {
+                    if (lines.isNotEmpty() && !paused) {
+                        listState.scrollToItem(0)
                     }
+                }
 
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 400.dp)
-                    ) {
-                        items(logLines) { line ->
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp)
+                ) {
+                    items(lines) { line ->
+                        SelectionContainer {
                             Text(
                                 text = line,
                                 fontFamily = FontFamily.Monospace,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(vertical = 1.dp)
+                                color = if (containerColor != null)
+                                    MaterialTheme.colorScheme.onErrorContainer
+                                else
+                                    MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .combinedClickable(
+                                        onClick = {},
+                                        onLongClick = {
+                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            onCopyLine(line)
+                                        }
+                                    )
+                                    .padding(vertical = 2.dp, horizontal = 4.dp)
                             )
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                         }
-                    }
-                }
-            }
-        }
-
-        // Crash log
-        if (ui.crashLog.isNotEmpty()) {
-            Spacer(Modifier.height(12.dp))
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
-                )
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "崩溃日志",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onErrorContainer
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
                         )
-                        TextButton(onClick = { vm.clearCrashLog() }) {
-                            Text("清除", color = MaterialTheme.colorScheme.onErrorContainer)
-                        }
                     }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        ui.crashLog.takeLast(2000),
-                        fontFamily = FontFamily.Monospace,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
                 }
             }
         }
@@ -353,7 +434,7 @@ fun SettingsSection() {
     var batteryIgnored by remember {
         mutableStateOf(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                val pm = ctx.getSystemService(android.content.Context.POWER_SERVICE) as PowerManager
+                val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
                 pm.isIgnoringBatteryOptimizations(ctx.packageName)
             } else {
                 true
@@ -451,14 +532,12 @@ fun SettingsSection() {
                 Button(
                     onClick = {
                         try {
-                            // Open app's notification channel settings
                             val intent = Intent().apply {
                                 action = Settings.ACTION_APP_NOTIFICATION_SETTINGS
                                 putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)
                             }
                             ctx.startActivity(intent)
                         } catch (_: Exception) {
-                            // Fallback: open app settings
                             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                                 data = Uri.parse("package:${ctx.packageName}")
                             }

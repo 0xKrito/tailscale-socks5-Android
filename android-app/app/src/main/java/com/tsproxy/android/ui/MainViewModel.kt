@@ -29,7 +29,8 @@ data class UiState(
     val loginUrl: String = "",
     val logs: String = "",
     val crashLog: String = "",
-    val statusText: String = "Stopped"
+    val statusText: String = "Stopped",
+    val logPaused: Boolean = false
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -109,6 +110,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             _ui.value = _ui.value.copy(logs = "")
         }
+    }
+
+    fun toggleLogPause() {
+        _ui.value = _ui.value.copy(logPaused = !_ui.value.logPaused)
     }
 
     private fun startStatusPolling() {
