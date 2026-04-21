@@ -118,22 +118,6 @@ jobs:
           name: tsproxy-aar
           path: android-app/app/libs/
 
-      # Generate a fixed keystore so debug builds always have same signature
-      # Users don't need to uninstall before updating
-      - name: Generate fixed keystore
-        working-directory: android-app
-        run: |
-          mkdir -p signing
-          keytool -genkey -v \
-            -keystore signing/keystore.jks \
-            -storepass "tailscale-socks5" \
-            -alias "key" \
-            -keypass "tailscale-socks5" \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=tailscale-socks5, OU=dev, O=dev, L=NA, ST=NA, C=US"
-
       - name: Generate Gradle wrapper
         working-directory: android-app
         run: |
