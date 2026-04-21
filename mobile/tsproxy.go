@@ -24,8 +24,42 @@ func init() {
 		os.Setenv("TMPDIR", "/data/local/tmp")
 		os.Setenv("TS_LOGS_DIR", "/data/local/tmp/tslogs")
 	}
-	log.Println("[init] TMPDIR =", os.Getenv("TMPDIR"))
-	log.Println("[init] TS_LOGS_DIR =", os.Getenv("TS_LOGS_DIR"))
+	// Android 没有 /etc/localtime，Go 回退到 UTC
+	// 从 Android 系统读取时区
+	if tz := os.Getenv("TZ"); tz == "" {
+		// Try multiple Android timezone sources
+		for _, p := range []string{
+			"/data/misc/zoneinfo/current",
+			"/system/usr/share/zoneinfo/current",
+			"/persist/time/zone",
+			"/etc/timezone",
+		} {
+			if link, err := os.Readlink(p); err == nil && link != "" {
+				os.Setenv("TZ", link)
+				break
+			}
+			if data, err := os.ReadFile(p); err == nil {
+				tzStr := strings.TrimSpace(string(data))
+				if tzStr != "" {
+					os.Setenv("TZ", tzStr)
+					break
+				}
+			}
+		}
+		// Last resort: parse persist.sys.timezone from build.prop
+		if os.Getenv("TZ") == "" {
+			if data, err := os.ReadFile("/system/build.prop"); err == nil {
+				for _, line := range strings.Split(string(data), "\n") {
+					line = strings.TrimSpace(line)
+					if strings.HasPrefix(line, "persist.sys.timezone=") {
+						os.Setenv("TZ", strings.TrimPrefix(line, "persist.sys.timezone="))
+						break
+					}
+				}
+			}
+		}
+	}
+	log.Println("[init] TZ =", os.Getenv("TZ"))
 }
 
 var (

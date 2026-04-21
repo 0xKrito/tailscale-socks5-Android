@@ -21,7 +21,9 @@ class TsProxyApp : Application() {
         instance = this
         createNotificationChannel()
         setupCrashHandler()
-        appendLog("App started, SDK=${Build.VERSION.SDK_INT}, arch=${Build.SUPPORTED_ABIS.joinToString()}")
+        // Set TZ for Go timezone — gomobile on Android doesn't have tz database
+        val tz = java.util.TimeZone.getDefault().id
+        appendLog("App started, SDK=${Build.VERSION.SDK_INT}, arch=${Build.SUPPORTED_ABIS.joinToString()}, TZ=$tz")
     }
 
     private fun createNotificationChannel() {

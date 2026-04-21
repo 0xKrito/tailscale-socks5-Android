@@ -13,15 +13,13 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pointerInput
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -248,7 +246,41 @@ fun MainScreen(vm: MainViewModel = viewModel()) {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+
+@Composable
+fun LogLine(
+    line: String,
+    containerColor: androidx.compose.ui.graphics.Color?,
+    onCopyLine: (String) -> Unit,
+    haptics: androidx.compose.ui.hapticfeedback.HapticFeedback
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onLongPress = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onCopyLine(line)
+                    }
+                )
+            }
+            .padding(vertical = 2.dp, horizontal = 4.dp)
+    ) {
+        Text(
+            text = line,
+            fontFamily = FontFamily.Monospace,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (containerColor != null)
+                MaterialTheme.colorScheme.onErrorContainer
+            else
+                MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+        )
+    }
+}
 @Composable
 fun LogCard(
     title: String,
@@ -320,29 +352,11 @@ fun LogCard(
                         .heightIn(max = 400.dp)
                 ) {
                     items(lines) { line ->
-                        SelectionContainer {
-                            Text(
-                                text = line,
-                                fontFamily = FontFamily.Monospace,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (containerColor != null)
-                                    MaterialTheme.colorScheme.onErrorContainer
-                                else
-                                    MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .combinedClickable(
-                                        onClick = {},
-                                        onLongClick = {
-                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            onCopyLine(line)
-                                        }
-                                    )
-                                    .padding(vertical = 2.dp, horizontal = 4.dp)
-                            )
-                        }
-                        HorizontalDivider(
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+                        LogLine(
+                            line = line,
+                            containerColor = containerColor,
+                            onCopyLine = onCopyLine,
+                            haptics = haptics
                         )
                     }
                 }
