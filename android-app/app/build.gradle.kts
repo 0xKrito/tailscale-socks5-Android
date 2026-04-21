@@ -17,10 +17,11 @@ android {
 
     signingConfigs {
         create("ci") {
-            storeFile = rootProject.file("signing/keystore.jks")
+            storeFile = rootProject.file("signing/keystore.p12")
             storePassword = "tailscale-socks5"
             keyAlias = "key"
             keyPassword = "tailscale-socks5"
+            storeType = "PKCS12"
         }
     }
 
@@ -31,7 +32,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            val ciKeystore = rootProject.file("signing/keystore.jks")
+            val ciKeystore = rootProject.file("signing/keystore.p12")
             signingConfig = if (ciKeystore.exists()) {
                 signingConfigs.getByName("ci")
             } else {
@@ -39,7 +40,7 @@ android {
             }
         }
         debug {
-            val ciKeystore = rootProject.file("signing/keystore.jks")
+            val ciKeystore = rootProject.file("signing/keystore.p12")
             signingConfig = if (ciKeystore.exists()) {
                 signingConfigs.getByName("ci")
             } else {
@@ -66,10 +67,8 @@ android {
 }
 
 dependencies {
-    // gomobile AAR — built by CI and placed in app/libs/
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"))))
 
-    // Compose
     implementation(platform("androidx.compose:compose-bom:2024.02.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
@@ -78,13 +77,10 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("androidx.activity:activity-compose:1.8.2")
 
-    // ViewModel + Lifecycle
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
 
-    // DataStore for preferences
     implementation("androidx.datastore:datastore-preferences:1.0.0")
 
-    // Core
     implementation("androidx.core:core-ktx:1.12.0")
 }

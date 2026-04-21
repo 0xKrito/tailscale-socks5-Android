@@ -3,8 +3,8 @@
 *.aar
 *.apk
 
-# Signing (CI generates, don't commit keys)
-**/signing/
+# Signing (committed fixed keystore)
+# android-app/signing/keystore.p12
 
 # Runtime
 config.json
