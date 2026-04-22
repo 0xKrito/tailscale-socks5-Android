@@ -25,7 +25,7 @@ func init() {
 		os.Setenv("TS_LOGS_DIR", "/data/local/tmp/tslogs")
 	}
 	// Android 没有 /etc/localtime，Go 回退到 UTC
-	// 从 Android 系统读取时区
+	// 需要同时设 TZ (时区名) 和 ZONEINFO (zoneinfo 数据目录)
 	if tz := os.Getenv("TZ"); tz == "" {
 		// Try multiple Android timezone sources
 		for _, p := range []string{
@@ -59,9 +59,37 @@ func init() {
 			}
 		}
 	}
-	log.Println("[init] TZ =", os.Getenv("TZ"))
+
+	// Set ZONEINFO so Go can find the timezone data files on Android
+	for _, zidir := range []string{
+		"/data/misc/zoneinfo",
+		"/system/usr/share/zoneinfo",
+	} {
+		if info, err := os.Stat(zidir); err == nil && info.IsDir() {
+			os.Setenv("ZONEINFO", zidir)
+			break
+		}
+	}
+
+	log.Println("[init] TZ =", os.Getenv("TZ"), "ZONEINFO =", os.Getenv("ZONEINFO"))
+
+	// Load timezone location for log timestamps
+	// time.Local is already initialized by Go runtime before init() runs,
+	// so setting TZ env var won't affect time.Now(). We must load explicitly.
+	if tz := os.Getenv("TZ"); tz != "" {
+		if loc, err := time.LoadLocation(tz); err == nil {
+			localTZ = loc
+			log.Println("[init] Loaded timezone:", tz)
+		} else {
+			log.Println("[init] Failed to load timezone:", err)
+		}
+	}
+	if localTZ == nil {
+		localTZ = time.Local // fallback to whatever Go detected
+	}
 }
 
+// global state
 var (
 	mu       sync.Mutex
 	server   *tsnet.Server
@@ -69,6 +97,7 @@ var (
 	running  bool
 	loginURL string
 	logBuf   = newLogBuffer(300)
+	localTZ  *time.Location
 )
 
 type logBuffer struct {
@@ -82,7 +111,8 @@ func newLogBuffer(max int) *logBuffer { return &logBuffer{max: max} }
 
 func (lb *logBuffer) write(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	timestamped := fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05.000"), msg)
+	ts := time.Now().In(localTZ).Format("15:04:05.000")
+	timestamped := fmt.Sprintf("[%s] %s", ts, msg)
 	lb.mu.Lock()
 	lb.msgs = append(lb.msgs, timestamped)
 	if len(lb.msgs) > lb.max {
