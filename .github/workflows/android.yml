@@ -5,6 +5,9 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
   JAVA_VERSION: "17"
   GRADLE_VERSION: "8.5"
