@@ -21,6 +21,12 @@ type TsProxy struct {
 }
 
 func NewTsProxy(tsServer0 *tsnet.Server, tcpTimeout0, udpTimeout0 int, debug0 bool) (*TsProxy, error) {
+	return NewTsProxyContext(context.Background(), tsServer0, tcpTimeout0, udpTimeout0, debug0)
+}
+
+// NewTsProxyContext permits Android to cancel a pending login on Stop.
+// Keep NewTsProxy for compatibility with the command-line entry point.
+func NewTsProxyContext(ctx context.Context, tsServer0 *tsnet.Server, tcpTimeout0, udpTimeout0 int, debug0 bool) (*TsProxy, error) {
 	t := &TsProxy{
 		tcpTimeout: tcpTimeout0,
 		udpTimeout: udpTimeout0,
@@ -28,7 +34,7 @@ func NewTsProxy(tsServer0 *tsnet.Server, tcpTimeout0, udpTimeout0 int, debug0 bo
 		debug:      debug0,
 	}
 	socks5.Debug = debug0
-	if _, err := t.tsServer.Up(context.Background()); err != nil {
+	if _, err := t.tsServer.Up(ctx); err != nil {
 		return nil, fmt.Errorf("failed to start tsnet: %w", err)
 	}
 	return t, nil

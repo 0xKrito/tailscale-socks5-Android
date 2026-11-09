@@ -91,13 +91,16 @@ func init() {
 
 // global state
 var (
-	mu       sync.Mutex
-	server   *tsnet.Server
-	proxy    *tsp.TsProxy
-	running  bool
-	loginURL string
-	logBuf   = newLogBuffer(300)
-	localTZ  *time.Location
+	mu           sync.Mutex
+	server       *tsnet.Server
+	proxy        *tsp.TsProxy
+	running      bool
+	starting     bool
+	startCancel  context.CancelFunc
+	startupError string
+	loginURL     string
+	logBuf       = newLogBuffer(300)
+	localTZ      *time.Location
 )
 
 type logBuffer struct {
@@ -153,7 +156,11 @@ func Start(socksAddr, hostname, tsnetDir string) string {
 
 	if running {
 		logBuf.write("Already running")
-		return ""
+		return "RUNNING"
+	}
+	if starting {
+		logBuf.write("Already starting; ignored duplicate start")
+		return "STARTING"
 	}
 
 	if socksAddr == "" {
@@ -203,21 +210,52 @@ func Start(socksAddr, hostname, tsnetDir string) string {
 		},
 	}
 
-	go bootServer(srv, socksAddr)
+	ctx, cancel := context.WithCancel(context.Background())
+	starting = true
+	startupError = ""
+	loginURL = ""
+	startCancel = cancel
+	go bootServer(ctx, cancel, srv, socksAddr)
 
-	return ""
+	return "STARTING"
 }
 
-func bootServer(srv *tsnet.Server, socksAddr string) {
+func bootServer(ctx context.Context, cancel context.CancelFunc, srv *tsnet.Server, socksAddr string) {
+	completed := false
+	failure := ""
 	defer func() {
+		// Preserve whether Stop requested cancellation before ending watchers.
+		userCanceled := ctx.Err() != nil
+		cancel()
 		if r := recover(); r != nil {
+			failure = fmt.Sprintf("panic: %v", r)
 			logBuf.write("PANIC: %v", r)
 		}
+		if completed {
+			return
+		}
+		// Start has returned or unwound. Close partially initialized tsnet
+		// resources as well, to avoid accumulating state across retries.
+		_ = srv.Close()
+		mu.Lock()
+		starting = false
+		startCancel = nil
+		if !userCanceled {
+			startupError = failure
+		} else {
+			startupError = "" // User-initiated cancellation is not a crash.
+		}
+		loginURL = ""
+		mu.Unlock()
 	}()
 
 	logBuf.write("Step 1: Initializing tsnet...")
 	if err := srv.Start(); err != nil {
+		failure = "tsnet initialization: " + err.Error()
 		logBuf.write("srv.Start error: %v", err)
+		return
+	}
+	if ctx.Err() != nil {
 		return
 	}
 	logBuf.write("Step 1: Done")
@@ -229,7 +267,7 @@ func bootServer(srv *tsnet.Server, socksAddr string) {
 			logBuf.write("LocalClient (watch): %v", err)
 			return
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
 		defer cancel()
 		watcher, err := lc.WatchIPNBus(ctx, ipn.NotifyInitialState)
 		if err != nil {
@@ -247,7 +285,7 @@ func bootServer(srv *tsnet.Server, socksAddr string) {
 				mu.Lock()
 				loginURL = *url
 				mu.Unlock()
-				logBuf.write("LOGIN URL: %s", *url)
+				logBuf.write("Tailscale login URL ready (open it from the app)")
 				return
 			}
 			if n.State != nil && *n.State == ipn.Running {
@@ -258,9 +296,13 @@ func bootServer(srv *tsnet.Server, socksAddr string) {
 	}()
 
 	logBuf.write("Step 2: Creating TsProxy (will wait for auth)...")
-	p, err := tsp.NewTsProxy(srv, 1100, 330, true)
+	p, err := tsp.NewTsProxyContext(ctx, srv, 1100, 330, true)
 	if err != nil {
+		failure = "tsnet authorization: " + err.Error()
 		logBuf.write("NewTsProxy error: %v", err)
+		return
+	}
+	if ctx.Err() != nil {
 		return
 	}
 	logBuf.write("Step 2: TsProxy created")
@@ -282,20 +324,42 @@ func bootServer(srv *tsnet.Server, socksAddr string) {
 	time.Sleep(500 * time.Millisecond)
 
 	logBuf.write("Verifying SOCKS5 port...")
-	verifyConn, err := net.DialTimeout("tcp", socksAddr, 2*time.Second)
-	if err != nil {
-		logBuf.write("WARNING: Cannot connect to SOCKS5: %v", err)
-	} else {
-		verifyConn.Close()
-		logBuf.write("SOCKS5 port is listening")
+	var verifyConn net.Conn
+	for try := 0; try < 10; try++ {
+		if ctx.Err() != nil {
+			tsp.StopSocks5()
+			return
+		}
+		verifyConn, err = net.DialTimeout("tcp", socksAddr, 350*time.Millisecond)
+		if err == nil {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
 	}
+	if err != nil {
+		failure = "SOCKS5 listener: " + err.Error()
+		logBuf.write("SOCKS5 failed to listen: %v", err)
+		tsp.StopSocks5()
+		return
+	}
+	verifyConn.Close()
+	logBuf.write("SOCKS5 port is listening")
 
 	mu.Lock()
+	if ctx.Err() != nil {
+		mu.Unlock()
+		tsp.StopSocks5()
+		return
+	}
 	server = srv
 	proxy = p
 	running = true
+	starting = false
+	startCancel = nil
+	startupError = ""
 	loginURL = ""
 	mu.Unlock()
+	completed = true
 	logBuf.write("ts-proxy is running!")
 }
 
@@ -307,6 +371,15 @@ func GetLoginURL() string {
 
 func Stop() {
 	mu.Lock()
+	if starting {
+		cancel := startCancel
+		mu.Unlock()
+		if cancel != nil {
+			cancel()
+		}
+		logBuf.write("Canceling pending Tailscale startup...")
+		return
+	}
 
 	if !running && server == nil {
 		mu.Unlock()
@@ -320,6 +393,8 @@ func Stop() {
 	server = nil
 	proxy = nil
 	running = false
+	startupError = ""
+	loginURL = ""
 	mu.Unlock()
 
 	if srv != nil {
@@ -332,6 +407,23 @@ func Stop() {
 	tsp.StopSocks5()
 
 	logBuf.write("Stopped")
+}
+
+// GetStartupState separates a pending start from a running SOCKS5 server.
+// It also lets the Android UI report failures without parsing log timestamps.
+func GetStartupState() string {
+	mu.Lock()
+	defer mu.Unlock()
+	if running {
+		return "RUNNING"
+	}
+	if starting {
+		return "STARTING"
+	}
+	if startupError != "" {
+		return "ERROR: " + startupError
+	}
+	return "STOPPED"
 }
 
 func IsRunning() bool {

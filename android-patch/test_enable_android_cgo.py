@@ -28,6 +28,12 @@ class AndroidCgoPatchTests(unittest.TestCase):
         self.assertNotIn("netmon.RegisterInterfaceGetter", source)
         self.assertNotIn("anet.Interfaces()", source)
 
+    def test_auth_url_not_leaked_to_diagnostic_log(self):
+        project = Path(__file__).resolve().parents[1]
+        source = (project / "mobile/tsproxy.go").read_text()
+        self.assertNotIn('logBuf.write("LOGIN URL: %s"', source)
+        self.assertIn('loginURL = *url', source)  # UI still gets the auth link
+
     def test_unknown_version_refused(self):
         with tempfile.TemporaryDirectory() as temp:
             module = Path(temp)
