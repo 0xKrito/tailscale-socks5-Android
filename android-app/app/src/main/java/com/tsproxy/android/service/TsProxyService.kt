@@ -83,7 +83,9 @@ class TsProxyService : Service() {
                 val result = Tsproxy.start(socks, hostname, resolvedDir)
                 val status = when {
                     result.startsWith("ERROR:") -> "Failed: ${result.removePrefix("ERROR: ").take(80)}"
-                    else -> "Running on $socks"
+                    result == "STARTING" -> "Initializing Tailscale..."
+                    result == "RUNNING" -> "Running on $socks"
+                    else -> "Unexpected startup result: ${result.take(80)}"
                 }
                 TsProxyApp.appendLog("Tsproxy.start returned: $status")
                 updateNotification(status)

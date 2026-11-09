@@ -82,19 +82,35 @@ App → Clash TUN (全局代理)
 ### 从源码编译
 
 ```bash
-# 需要 Go 1.24+, Android NDK, gomobile
-go install golang.org/x/mobile/cmd/gomobile@latest
-go install golang.org/x/mobile/cmd/gobind@latest
+# 需要 Go 1.27+, Android SDK/NDK, Java 17/21 和 gomobile
+go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20261011034528-197770444867
+go install golang.org/x/mobile/cmd/gobind@v0.0.0-20261011034528-197770444867
 
 git clone https://github.com/0xKrito/tailscale-socks5-Android.git
 cd tailscale-socks5-Android
-go get golang.org/x/mobile/bind@latest
+go get -tool golang.org/x/mobile/cmd/gobind
 go mod tidy
+
+# Android gomobile 使用 cgo，但 Tailscale androidbin 默认排除了 Android cgo。
+# 只修改隔离的依赖副本，不修改 Go 全局模块缓存。
+go mod download tailscale.com
+TS_ORIG=$(go list -m -f '{{.Dir}}' tailscale.com)
+TS_DIR=$(mktemp -d)/tailscale-patched
+cp -R "$TS_ORIG" "$TS_DIR"
+chmod u+w "$TS_DIR/feature/androidbin/register.go"
+python3 android-patch/enable_android_cgo.py "$TS_DIR"
+go mod edit -replace "tailscale.com=$TS_DIR"
+
 gomobile init
 gomobile bind -ldflags="-checklinkname=0 -s -w" -target=android -androidapi=26 -o android-app/app/libs/tsproxy.aar ./mobile/
 
-# 编译 APK
-cd android-app && ./gradlew assembleDebug
+# 编译 APK：使用 Gradle 8.x，勿用 Gradle 9.x 配合 AGP 8.2.2。
+cd android-app
+gradle wrapper --gradle-version 8.5
+./gradlew assembleDebug
+
+# 打包之后可在仓库根目录取消本地 replace（CI 自动使用临时副本）
+# go mod edit -dropreplace tailscale.com
 ```
 
 ### GitHub Actions
@@ -104,7 +120,8 @@ CI 自动编译 AAR + APK。触发方式：push tag `v*` 或手动 dispatch。
 ### Tailscale Android 补丁
 
 CI 编译时自动打以下补丁：
-- netmon/state.go: `net.Interfaces()` → `anet.Interfaces()` (修复 Android SDK≥30 netlink 权限)
+- `feature/androidbin/register.go`: 在独立的 Tailscale 源码副本中启用 Android+cgo 接口枚举回退（处理 `netlinkrib: permission denied`）
+- 删除 `tsproxy/setup.go` 的 `anet.Interfaces` 自定义 getter：它会抢先执行，导致前述 fallback 永远不会被调用
 - tsnet/tsnet.go: 添加 `os.Executable()` Android fallback
 - ipn/localapi: 启用 ACME 证书功能
 

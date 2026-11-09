@@ -102,7 +102,7 @@ fun MainScreen(vm: MainViewModel = viewModel()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = { vm.startProxy() },
-                        enabled = !ui.running,
+                        enabled = !ui.running && !ui.starting,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary
                         ),
@@ -114,7 +114,7 @@ fun MainScreen(vm: MainViewModel = viewModel()) {
                     }
                     Button(
                         onClick = { vm.stopProxy() },
-                        enabled = ui.running,
+                        enabled = ui.running || ui.starting,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.error
                         ),

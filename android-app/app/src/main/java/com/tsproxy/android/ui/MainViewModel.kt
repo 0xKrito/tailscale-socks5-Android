@@ -22,6 +22,7 @@ private val Application.dataStore by preferencesDataStore("tsproxy_prefs")
 
 data class UiState(
     val running: Boolean = false,
+    val starting: Boolean = false,
     val socksAddr: String = "127.0.0.1:1080",
     val hostname: String = "ts-socks5",
     val tsnetDir: String = "",
@@ -121,6 +122,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             while (true) {
                 withContext(Dispatchers.IO) {
                     val running = Tsproxy.isRunning()
+                    val startup = Tsproxy.getStartupState() ?: "STOPPED"
+                    val starting = startup == "STARTING"
                     val ip = if (running) Tsproxy.getTailscaleIP() ?: "" else ""
                     val logs = Tsproxy.getLogs() ?: ""
                     val crashLog = TsProxyApp.readCrashLog()
@@ -128,10 +131,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     val newStatus = when {
                         running -> "Running"
                         url.isNotEmpty() -> "需要授权"
-                        else -> _ui.value.statusText
+                        startup.startsWith("ERROR:") -> "启动失败: ${startup.removePrefix("ERROR: ").take(120)}"
+                        starting -> "正在启动 Tailscale..."
+                        else -> "Stopped"
                     }
                     _ui.value = _ui.value.copy(
                         running = running,
+                        starting = starting,
                         tailscaleIP = ip,
                         logs = logs,
                         loginUrl = url,

@@ -9,37 +9,9 @@ import (
 	"time"
 
 	"github.com/ge9/socks5"
-	"github.com/wlynxg/anet"
-	"tailscale.com/net/netmon"
 	"tailscale.com/net/tsaddr"
 	"tailscale.com/tsnet"
 )
-
-// Register anet as the interface getter BEFORE any tailscale code runs.
-// init() runs at package load time, before srv.Start() calls netmon.New().
-// This sets altNetInterfaces so netInterfaces() always uses anet
-// (which reads /proc/net directly) instead of net.Interfaces()
-// (which uses netlink, blocked on Android SDK>=30).
-func init() {
-	netmon.RegisterInterfaceGetter(func() ([]netmon.Interface, error) {
-		ifs, err := anet.Interfaces()
-		if err != nil {
-			return nil, fmt.Errorf("anet.Interfaces: %w", err)
-		}
-		ret := make([]netmon.Interface, len(ifs))
-		for i := range ifs {
-			addrs, err := anet.InterfaceAddrsByInterface(&ifs[i])
-			if err != nil {
-				return nil, fmt.Errorf("ifs[%d].Addrs: %w", i, err)
-			}
-			ret[i] = netmon.Interface{
-				Interface: &ifs[i],
-				AltAddrs:  addrs,
-			}
-		}
-		return ret, nil
-	})
-}
 
 type TsProxy struct {
 	tsServer   *tsnet.Server
@@ -49,6 +21,12 @@ type TsProxy struct {
 }
 
 func NewTsProxy(tsServer0 *tsnet.Server, tcpTimeout0, udpTimeout0 int, debug0 bool) (*TsProxy, error) {
+	return NewTsProxyContext(context.Background(), tsServer0, tcpTimeout0, udpTimeout0, debug0)
+}
+
+// NewTsProxyContext permits Android to cancel a pending login on Stop.
+// Keep NewTsProxy for compatibility with the command-line entry point.
+func NewTsProxyContext(ctx context.Context, tsServer0 *tsnet.Server, tcpTimeout0, udpTimeout0 int, debug0 bool) (*TsProxy, error) {
 	t := &TsProxy{
 		tcpTimeout: tcpTimeout0,
 		udpTimeout: udpTimeout0,
@@ -56,8 +34,7 @@ func NewTsProxy(tsServer0 *tsnet.Server, tcpTimeout0, udpTimeout0 int, debug0 bo
 		debug:      debug0,
 	}
 	socks5.Debug = debug0
-	// anetPatch() is no longer needed here — init() handles it
-	if _, err := t.tsServer.Up(context.Background()); err != nil {
+	if _, err := t.tsServer.Up(ctx); err != nil {
 		return nil, fmt.Errorf("failed to start tsnet: %w", err)
 	}
 	return t, nil
