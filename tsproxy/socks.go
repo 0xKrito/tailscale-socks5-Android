@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/ge9/socks5"
@@ -24,16 +25,21 @@ func socksLog(format string, args ...any) {
 
 // socks5Server is the running SOCKS5 server instance.
 // Set when ServeSOCKS starts so StopSocks5() can shut it down.
-var socks5Server *socks5.Server
+var (
+	socks5Mu     sync.Mutex
+	socks5Server *socks5.Server
+)
 
 // StopSocks5 shuts down the running SOCKS5 server, releasing the port.
 // Safe to call when no server is running.
 func StopSocks5() {
+	socks5Mu.Lock()
 	s := socks5Server
+	socks5Server = nil
+	socks5Mu.Unlock()
 	if s == nil {
 		return
 	}
-	socks5Server = nil // prevent re-entrance
 	socksLog("Shutting down SOCKS5...")
 	// RunnerGroup.Done() calls Stop() on each runner (which closes listeners)
 	// then waits for all goroutines to exit.
@@ -83,7 +89,9 @@ func (t *TsProxy) baseSOCKSConfig(bind string) *socks5.Server {
 
 func (t *TsProxy) ServeSOCKS(bind, tcp4, tcp6, udp4, udp6 string) {
 	server := t.baseSOCKSConfig(bind)
+	socks5Mu.Lock()
 	socks5Server = server
+	socks5Mu.Unlock()
 
 	server.DialTCP = func(network string, _, raddr string) (net.Conn, error) {
 		socksLog("DialTCP: %s %s", network, raddr)
@@ -166,7 +174,11 @@ func (t *TsProxy) ServeSOCKS(bind, tcp4, tcp6, udp4, udp6 string) {
 	socksLog("Calling ListenAndServe on %s", bind)
 	err := server.ListenAndServe(nil)
 	socksLog("ListenAndServe returned: %v", err)
-	socks5Server = nil
+	socks5Mu.Lock()
+	if socks5Server == server {
+		socks5Server = nil
+	}
+	socks5Mu.Unlock()
 }
 
 func (t *TsProxy) ForwardSOCKS(bind, connect string) {

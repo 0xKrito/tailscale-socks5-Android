@@ -310,16 +310,7 @@ func bootServer(ctx context.Context, cancel context.CancelFunc, srv *tsnet.Serve
 	tsp.SetSocksLogf(logBuf.write)
 
 	logBuf.write("Step 3: Serving SOCKS5 on %s", socksAddr)
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				logBuf.write("SOCKS panic: %v", r)
-			}
-		}()
-		logBuf.write("About to call p.ServeSOCKS(%s, ...)", socksAddr)
-		p.ServeSOCKS(socksAddr, "", "", "", "")
-		logBuf.write("p.ServeSOCKS returned")
-	}()
+	go superviseSOCKS(srv, p, socksAddr)
 
 	time.Sleep(500 * time.Millisecond)
 
@@ -361,6 +352,50 @@ func bootServer(ctx context.Context, cancel context.CancelFunc, srv *tsnet.Serve
 	mu.Unlock()
 	completed = true
 	logBuf.write("ts-proxy is running!")
+}
+
+// superviseSOCKS retries local listener failures after transient changes.
+// A failed UDP receive can terminate the runner group and close TCP too.
+func superviseSOCKS(srv *tsnet.Server, p *tsp.TsProxy, socksAddr string) {
+	for attempt := 0; ; attempt++ {
+		logBuf.write("SOCKS5 listener attempt %d", attempt+1)
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					logBuf.write("SOCKS panic: %v", r)
+				}
+			}()
+			p.ServeSOCKS(socksAddr, "", "", "", "")
+		}()
+		mu.Lock()
+		active := running && server == srv
+		mu.Unlock()
+		if !active {
+			return
+		}
+		if attempt >= 3 {
+			mu.Lock()
+			if running && server == srv {
+				running = false
+				server = nil
+				proxy = nil
+				startupError = "SOCKS5 listener failed after 3 retries"
+			}
+			mu.Unlock()
+			logBuf.write("SOCKS5 listener failed after recovery attempts")
+			_ = srv.Close()
+			return
+		}
+		delay := time.Second * time.Duration(1<<attempt)
+		logBuf.write("SOCKS5 listener exited; retry in %s", delay)
+		time.Sleep(delay)
+		mu.Lock()
+		active = running && server == srv
+		mu.Unlock()
+		if !active {
+			return
+		}
+	}
 }
 
 func GetLoginURL() string {
