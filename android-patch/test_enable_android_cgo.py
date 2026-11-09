@@ -21,6 +21,13 @@ class AndroidCgoPatchTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(target.read_text(), NEW + "\npackage androidbin\n")
 
+    def test_no_broken_anet_getter(self):
+        # A registered getter bypasses androidbin's fallback entirely.
+        project = Path(__file__).resolve().parents[1]
+        source = (project / "tsproxy/setup.go").read_text()
+        self.assertNotIn("netmon.RegisterInterfaceGetter", source)
+        self.assertNotIn("anet.Interfaces()", source)
+
     def test_unknown_version_refused(self):
         with tempfile.TemporaryDirectory() as temp:
             module = Path(temp)

@@ -4,7 +4,6 @@ go 1.27.1
 
 require (
 	github.com/ge9/socks5 v0.0.0-20251216070423-c5d137831bdc // direct
-	github.com/wlynxg/anet v0.0.5 // direct
 	tailscale.com v1.104.1 // direct
 )
 

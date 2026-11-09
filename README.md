@@ -121,6 +121,7 @@ CI 自动编译 AAR + APK。触发方式：push tag `v*` 或手动 dispatch。
 
 CI 编译时自动打以下补丁：
 - `feature/androidbin/register.go`: 在独立的 Tailscale 源码副本中启用 Android+cgo 接口枚举回退（处理 `netlinkrib: permission denied`）
+- 删除 `tsproxy/setup.go` 的 `anet.Interfaces` 自定义 getter：它会抢先执行，导致前述 fallback 永远不会被调用
 - tsnet/tsnet.go: 添加 `os.Executable()` Android fallback
 - ipn/localapi: 启用 ACME 证书功能
 

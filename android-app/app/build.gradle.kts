@@ -11,8 +11,8 @@ android {
         applicationId = "com.tsproxy.android"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10401
-        versionName = "1.104.1-androidfix"
+        versionCode = 10402
+        versionName = "1.104.1-androidfix2"
     }
 
     signingConfigs {
